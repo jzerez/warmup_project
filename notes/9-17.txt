@@ -1,0 +1,7 @@
+Warmup Project Checkpoint 1 deliverables:
+Simple visualizations using rviz
+Test drive bag file
+Teleop
+Drive square
+Wall following
+A preliminary writeup of your wall follower
