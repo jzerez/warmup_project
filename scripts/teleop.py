@@ -33,21 +33,28 @@ class Teleoperator():
         """
         continually listens for key presses and sends the appropriate commands
         """
-        while not rospy.is_shutdown() and self.key != '\x03':
-            self.key = self.getKey()
+        while not rospy.is_shutdown():
+            msg = self.get_pub_message()
+            if not msg:
+                break
+            self.pub.publish(msg)
 
-            if self.key == 'w':
-                self.pub.publish(self.forward)
-            elif self.key == 'a':
-                self.pub.publish(self.left)
-            elif self.key == 's':
-                self.pub.publish(self.back)
-            elif self.key == 'd':
-                self.pub.publish(self.right)
-            else:
-                self.pub.publish(self.stop)
         print('terminated.')
 
+    def get_pub_message(self):
+        self.key = self.getKey()
+        if self.key == '\x03':
+            return None
+        elif self.key == 'w':
+            return self.forward
+        elif self.key == 'a':
+            return self.left
+        elif self.key == 's':
+            return self.back
+        elif self.key == 'd':
+            return self.right
+        else:
+            return self.stop
 
     def getKey(self):
         """
