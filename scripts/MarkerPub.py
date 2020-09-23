@@ -5,14 +5,15 @@ from geometry_msgs.msg import Pose, Point, Quaternion, Vector3
 import rospy
 
 class MarkerPub:
-    def __init__(self):
-        rospy.init_node('test_message')
+    def __init__(self, standalone=True):
+        if standalone:
+            rospy.init_node('test_message')
         self.publisher = rospy.Publisher('/test_sphere', Marker, queue_size=10)
 
 
-    def ping(self, operation):
+    def marker_ping(self, operation, x, y):
         header = Header(stamp = rospy.Time.now(), frame_id="base_link")
-        pose = Pose(Point(1,2,0), Quaternion(0,0,0,0))
+        pose = Pose(Point(x,y,0), Quaternion(0,0,0,0))
         scale = Vector3(0.5,0.5,0.5)
         color = ColorRGBA(0, 1, 0.5, 0.5)
 
@@ -33,12 +34,13 @@ class MarkerPub:
         rate = rospy.Rate(1)
         # print(self.rate)
         while not rospy.is_shutdown():
-            self.ping(Marker.ADD)
+            self.marker_ping(Marker.ADD, 1, 2)
             print('ping')
             rate.sleep()
-            self.ping(Marker.DELETE)
+            self.marker_ping(Marker.DELETE, 1, 2)
             rate.sleep()
         print('rospy shutdown. Stopping pings.')
+
 if __name__ == "__main__":
     apple = MarkerPub()
     apple.run()
