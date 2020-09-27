@@ -54,7 +54,7 @@ It would have been slightly more interesting (and perhaps more accurate) if I ha
 Using the odometry information from the encoders however, would not guarantee precision. If the wheels slip relative to the floor, then the estimation of the NEATO's pose in the global frame would be a bit off.
 
 ## Wall Follower
-The point of this exercise was to use the LIDAR sensor to align the NEATO to drive parallel to a wall while moving forward continuously.Below is an animation of the wall follower in action.
+The point of this exercise was to use the LIDAR sensor to align the NEATO to drive parallel to a wall while moving forward continuously. Below is an animation of the wall follower in action.
 
 ![Wall Follower Gif](./assets/wall_follow.gif)
 
@@ -66,6 +66,10 @@ From a high level, the program initializes a node called `WallFollower` that pub
 In order to get the wall following behavior, I split the incoming LIDAR scans into zones based on angular position. One of the zones, `r_1's`, is from 270 degrees to 315 degrees (this is everything 45 degrees in front of the rightmost LIDAR scan). The other zone, `r_2's` is from 225 degrees to 270 degrees (this is everything 45 degrees behind of the rightmost LIDAR scan). Then, I compare the mean distance from the first zone to the second zone. I use a proportional controller that applies a constant `k` to the difference of the means in order to generate a steer command.
 
 Comparing mean distances serves to filter out minor noise from the LIDAR scan or any inconsistencies in the wall being followed.
+
+Below is a diagram that shows how this averaging strategy works.
+
+![Wall Follower Diagram](./assets/wall_follow_diagram.png)
 
 I also check the smallest 15 LIDAR data points and only apply the turning logic when the mean of those points surpasses a certain threshold. This helps the NEATO to remain relatively close to the wall while following it.
 
@@ -89,7 +93,9 @@ The person follower exercise's goal was to implement attractive behavior. The NE
 From a high level, the program initializes a node called `PersonFollower` that publishes `Twist` messages the `cmd_vel` topic and subscribes to `LaserScan` messages from the `scan` topic. Below is a graph of the nodes and the topics that connect them.
 ![Person Follower Node Graph](./assets/person_follow_graph.png)
 
-In this exercise, I wrote a version of RANSAC to work on circular objects. From the set of LIDAR data points, I select a 3 data points that are relatively close to each other (5 degrees apart from each other). Because 3 points determine a circle, I can fit a circle to these three points. Using the center and radius of this circle, I count the number of LIDAR points that within 5 centimeters of the calculated radius. I perform this 3 point sampling a number of times and find the candidate circle that has the greatest number of member data points and is reasonably close to the target radius size of half of a meter. Below is a diagram of how circular RANSAC works.
+In this exercise, I wrote a version of RANSAC to work on circular objects. From the set of LIDAR data points, I select a 3 data points that are relatively close to each other (5 degrees apart from each other). Because 3 points determine a circle, I can fit a circle to these three points. Using the center and radius of this circle, I count the number of LIDAR points that within 5 centimeters of the calculated radius. I perform this 3 point sampling a number of times and find the candidate circle that has the greatest number of member data points and is reasonably close to the target radius size of half of a meter.
+
+Below is a diagram that illustrates how circular RANSAC works. The red circles are the fitted circles and the black circles that are concentric to them represent the allowable radius threshold.
 
 ![Person Follower Diagram](./assets/person_follow_diagram.png)
 
@@ -117,7 +123,7 @@ The high-level structure of this of this program is a little bit different than 
 
 On a technical level, I created a very simple algorithm to avoid obstacles while navigating to a target. The program takes each vector that represents a lidar point, scales them based on their distance to the NEATO, and sums them to create a "repulsion" vector. Additionally I add an "attraction" vector which points towards the goal.
 
-Because the goal is a hardcoded point in the global frame, I need to constantly transform from the global frame to the NEATO reference frame to assign velocity commands. To do this, I use a `TransformListener` object from the `tf2_ros` library. Using this I can query for the coordinate transform between the NEATO frame, `base_footprint`, and the global frame, `odom`. I can then apply the transformation to the target to get it in terms of the NEATO's reference frame.
+Because the goal is a hard-coded point in the global frame, I need to constantly transform from the global frame to the NEATO reference frame to assign velocity commands. To do this, I use a `TransformListener` object from the `tf2_ros` library. Using this I can query for the coordinate transform between the NEATO frame, `base_footprint`, and the global frame, `odom`. I can then apply the transformation to the target to get it in terms of the NEATO's reference frame.
 
 Once the attraction and repulsion vectors are added together, I use a simple proportional controller to adjust the NEATO's heading. The linear velocity is togged using a simple distance threshold (bang-bang controller).
 
@@ -127,6 +133,28 @@ The main challenges and areas of improvement for this exercise come in the form 
 * The magnitude of attraction for the target
 * The rate of turning
 
-Apart from a lot of trial and error, I don't really know how to better tune these constants, but I know that if they were optimized, then the behavior of the NEATO would be a lot more robust. Additionally, such optimizations would allow the NEATO to more often take a more direct path to the target.  
+Apart from a lot of trial and error, I don't really know how to better tune these constants, but I know that if they were optimized, then the behavior of the NEATO would be a lot more robust. Additionally, such optimizations would allow the NEATO to more often take a more direct path to the target.
 
 ## Finite State Controller
+The purpose of this exercise was to implement a finite state machine, where the NEATO changes between a number of behaviors depending on its state. I decided to leverage the functionality from the `PersonFollower` and `ObstacleAvoider` classes to generate the two different behaviors. When the NEATO sees a human target (ie: a circle 1 meter in diameter), it moves directly towards the human. However, if the NEATO cannot see a human target, then it moves towards a hard-coded global coordinate and simultaneously avoids any obstacles along the way. Below is a state transition diagram. Below is a gif showing Gazebo and Rviz side by side. The green marker in Rviz represent's the NEATO's current goal, and you can see the goal's position change as the human object moves in and out of the LIDAR's range.
+
+![State Machine Gif](./assets/state_machine.gif)
+
+### Implementation
+The implementation of this was very straightforward. I created a new class called `SmartFollower` that inherits from `ObstacleAvoider`. Because `ObstacleAvoider` also inherits from `PersonFollower`, all of the various behavioral functionality was already present. I simply needed to re-arrange some of the functions within `ObstacleAvoider` and `PersonFollower` so that they could be more easily be called by the `SmartFollower` class. This weird chain of inheritance probably doesn't make a whole lot of sense from an OOP perspective, but it was good practice with inheritance and seems a bit cleaner than just coping and pasting code.
+
+Because this state machine only has two states, Boolean logic is adequate for transitioning between the two states. In my implementation, I switch states based on whether the NEATO can see a human target or not, as shown in the simple state diagram below.
+![State Machine State Diagram](./assets/state_machine_diagram.png)
+
+### Challenges and Areas of Improvement
+Because this exercise was just a combination of two other exercises, it was pretty straightforward. The only thing that was mildly challenging was having to refactor the `PersonFollower` and `ObstacleAvoider` classes to be a bit more friendly for inheritance.
+
+Because this is a pretty boring state machine, it could be improved by adding additional states and specifications for the transitions between those states.
+
+Additionally, it would be much more interesting if the non-human tracking behavior was automatically exploring the space while avoiding obstacles rather than just navigating to a fixed global goal. With this behavior, you could effectively play hide and seek with the NEATO!
+
+## Final Conclusions
+* **Code Organization is important and OOP is powerful:** As I continue to use python, I'm getting more and more familiar with how to structure my code in an organized and Object-Oriented way. This has helped to streamline the code quite a bit, as it reduces how much re-coding or blind code copying I need to do. I don't think that I was extremely elegant with my OOP in this project, especially in terms of creating readable/logically structured code. However, I think I still got good practice with OOP and got good use out of it regardless. I need to continue to practice to streamline my development and increase readability.
+* **Proportional Controllers are quite nice:** In most of the exercises, I got away with just using a simple proportional controller. They are so easy to implement and relatively forgiving in terms of the constants that you choose. Perhaps in the future, it'd be good to practice adding Integral or Derivative terms to the controller.
+* **Numpy is great, but doesn't always play nice with ROS:** I'm trying to get more familiar with Numpy, and I used it pretty consistently through this project. For the most part, it was really great to have numpy's many built in functionalities. However, in some scenarios, it felt a bit overkill to use Numpy arrays to store data over regular lists, or some of ROS's built in data types (ex: `Vector3`). The extra functionality is nice, but it also felt pretty sloppy having to transform between various data types depending on the context.
+* **Robust code is hard to write:** Is this really a conclusion from this project? Probably not, because everybody knows that. But regardless, creating code that handles weird edge cases was challenging and something I thought a lot about while working on this project.
