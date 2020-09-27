@@ -10,13 +10,13 @@ class WallFollower():
 
     def __init__(self):
         self.node = rospy.init_node('WallFollower')
-        self.follow_dist = 0.7
+        self.follow_dist = 0.8
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
         self.sub = rospy.Subscriber('/scan', LaserScan, self.parse_lidar)
 
 
         self.empty_scans = 0
-        self.k = 0.6
+        self.k = 0.7
         self.steer = 0
         self.rate = rospy.Rate(3)
 

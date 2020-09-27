@@ -15,8 +15,9 @@ class Teleoperator():
     Publishes commands to the 'cmd_vel' topic in order to control the NEATO with
     the W-A-S-D keys. Hold down a key to move.
     """
-    def __init__(self):
-        rospy.init_node('teleoperator')
+    def __init__(self, standalone=True):
+        if standalone:
+            rospy.init_node('teleoperator')
         self.settings = termios.tcgetattr(sys.stdin)
         self.key = None
         self.pub = rospy.Publisher("cmd_vel", Twist, queue_size=10)

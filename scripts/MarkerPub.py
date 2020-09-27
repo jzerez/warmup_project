@@ -7,7 +7,7 @@ import rospy
 class MarkerPub:
     def __init__(self, standalone=True):
         if standalone:
-            rospy.init_node('test_message')
+            rospy.init_node('Goal Marker')
         self.publisher = rospy.Publisher('/test_sphere', Marker, queue_size=10)
 
 

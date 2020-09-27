@@ -16,28 +16,30 @@ class PersonFollower():
         self.sub = rospy.Subscriber('scan', LaserScan, self.parse_lidar)
 
 
-        self.pub.publish(Twist(Vector3(0,0,0), Vector3(0,0,0)))
-
-        self.person_radius = 0.5
-        self.target_dist = self.person_radius + 0.3
+        self.pub.publish(Twist(Vector3(0.1,0,0), Vector3(0,0,0)))
+        rospy.sleep(1)
+        print('done')
+        self.target_radius = 0.47
+        self.target_dist = self.target_radius + 0.3
         self.points = np.array([])
         self.marker_pub = MarkerPub(standalone=False)
 
     def run(self):
-        r = rospy.Rate(1)
+        r = rospy.Rate(10)
         while not rospy.is_shutdown():
             center, radius = self.circle_ransac(self.points, plot_mode=False)
             if center is None:
                 r.sleep()
+                print('no human found')
                 continue
             self.marker_pub.marker_ping(Marker.ADD, center[0], center[1])
 
             dist_to_target = np.linalg.norm(center)
             vel_command = (dist_to_target - self.target_dist) * 0.3
-            turn_command = np.arctan2(center[1], center[0])
+            turn_command = np.arctan2(center[1], center[0]) * 0.8
 
             vel_lim = 0.7
-            turn_lim = 1
+            turn_lim = 1.3
             if abs(vel_command) > vel_lim:
                 vel_command = np.sign(vel_command) * vel_lim
 
@@ -48,16 +50,14 @@ class PersonFollower():
             rotate = Vector3(0,0,turn_command)
 
             move_msg = Twist(translate, rotate)
-            print('MOVING')
             print(move_msg)
             self.pub.publish(move_msg)
-
+            r.sleep()
 
 
     def parse_lidar(self, data):
         rs = np.array(data.ranges[:-1])
         thetas = np.linspace(0, 2*np.pi, 361)[:-1]
-
 
         non_infs = np.isfinite(rs)
         rs = rs[non_infs]
@@ -66,7 +66,6 @@ class PersonFollower():
         if rs.size == 0:
             print('empty rs')
             self.points = np.array([])
-            self.empty_scans += 1
             return
 
         xs,ys = self.polar_to_cartesian(rs, thetas)
@@ -105,8 +104,9 @@ class PersonFollower():
 
             center, radius = self.fit_circle(chosen_points[0], chosen_points[1], chosen_points[2])
 
-            member_points = self.find_membership(points, center, radius)
-            if member_points > most_points and abs(radius - self.person_radius) / self.person_radius < 0.1:
+            member_points = len(self.find_membership(points, center, radius))
+
+            if member_points > most_points and abs(radius - self.target_radius) / self.target_radius < 0.1:
                 most_points = member_points
                 best_center = center
                 best_radius = radius
@@ -119,6 +119,7 @@ class PersonFollower():
             plt.scatter(best_center[0], best_center[1], c='r', marker='x')
             plt.show()
 
+        print('RADIUS IS: ', best_radius)
         return best_center, best_radius
 
     def fit_circle(self, p1, p2, p3):
@@ -147,12 +148,12 @@ class PersonFollower():
         """
         Given a circle with a given center and radius, find the points in a given lidar scan that are within a certain tolerable distance to the edge of the circle
         """
-        num_members = 0
-        for point in points:
+        members = []
+        for index, point in enumerate(points):
             d = np.linalg.norm(point - center)
             if abs(d-radius) < tolerance:
-                num_members += 1
-        return num_members
+                members.append(index)
+        return members
 
 if __name__ == "__main__":
     person_follower = PersonFollower()
